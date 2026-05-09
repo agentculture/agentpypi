@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2026-05-09
+
+### Added
+
+- CI: upload pytest coverage to SonarCloud (`agentculture_auntiepypi`) via `SonarSource/sonarqube-scan-action@v6`. Mirrors steward's `tests.yml` pattern: `SONAR_TOKEN` promoted to job env, checkout fetches full history for blame attribution, scan step gated on `env.SONAR_TOKEN != ''` so fork PRs no-op cleanly. The existing `coverage.xml` artifact and `sonar-project.properties` are unchanged.
+
 ## [0.8.1] - 2026-05-03
 
 ### Added
