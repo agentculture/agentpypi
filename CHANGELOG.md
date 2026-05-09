@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.4] - 2026-05-09
+
+### Changed
+
+- Resync vendored skills from steward: replace pr-review (steward pre-0.7.0) with cicd (steward 0.9.2) and add communicate (steward 0.9.1, absorbed gh-issues). The cicd skill picks up runtime-resolved PR signatures via _resolve-nick.sh (signs `- auntiepypi (Claude)` from culture.yaml) and new workflow.sh subcommands (open-pr, await, wait-after-push, poll-readiness). communicate adds cross-repo issue post/fetch + Culture mesh messaging; post-issue.sh signature literal hard-coded to `- auntiepypi (Claude)` per the per-vendor portability rule. Updates docs/skill-sources.md, docs/quality-pipeline.md, CLAUDE.md, docs/onboarding.md, and .claude/skills.local.yaml.example to point at the new paths. Closes #19.
+
 ## [0.8.3] - 2026-05-09
 
 ### Fixed

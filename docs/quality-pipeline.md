@@ -214,7 +214,7 @@ jobs:
           npm install -g markdownlint-cli2@0.21.0
           markdownlint-cli2 "**/*.md" "#node_modules" "#.local"
       - name: portability-lint
-        run: bash .claude/skills/pr-review/scripts/portability-lint.sh
+        run: bash .claude/skills/cicd/scripts/portability-lint.sh
 
   version-check:
     # Only run on PR events. On push to main after merge, HEAD == origin/main
@@ -361,8 +361,8 @@ section 4: `black`, `isort`, `flake8`, `bandit`, `markdownlint-cli2`
 
 The branch-edit-commit-push-PR-review loop, including the portability
 lint, the `gh`/`jq` plumbing, and Qodo/Copilot reply automation, is
-owned by the vendored `pr-review` skill — see
-`.claude/skills/pr-review/SKILL.md`. Don't re-derive it here.
+owned by the vendored `cicd` skill — see
+`.claude/skills/cicd/SKILL.md`. Don't re-derive it here.
 
 ## Verification
 
@@ -377,7 +377,7 @@ uv run isort --check-only auntiepypi tests
 uv run flake8 auntiepypi tests
 uv run bandit -c pyproject.toml -r auntiepypi
 markdownlint-cli2 "**/*.md" "#node_modules"
-bash .claude/skills/pr-review/scripts/portability-lint.sh
+bash .claude/skills/cicd/scripts/portability-lint.sh
 
 # Steward's external diagnosis
 (cd ../steward && uv run steward doctor --scope self ../auntiepypi)

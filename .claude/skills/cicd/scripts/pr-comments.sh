@@ -5,6 +5,10 @@ set -euo pipefail
 #   1. Inline review comments (with thread resolve status)
 #   2. Issue comments (qodo summaries, sonarcloud, etc.)
 #   3. Top-level reviews with a non-empty body (copilot overview, etc.)
+#   4. SonarCloud new issues (silently skipped if project isn't on SonarCloud).
+#      Project key is derived as `<owner>_<repo>`; override with
+#      SONAR_PROJECT_KEY=<key> for non-standard naming. Page size defaults
+#      to 500; override with SONAR_PS=<n> when a noisy PR truncates.
 #
 # Usage: pr-comments.sh [--repo OWNER/REPO] PR_NUMBER
 
@@ -98,3 +102,40 @@ echo "$REVIEWS_WITH_BODY" | jq -r '
   (.body | split("\n") | if length > 10 then .[:10] + ["... (truncated)"] else . end | join("\n")),
   ""
 '
+
+# ── Section 4: SonarCloud new issues ──────────────────────────────────────
+# Public API; no auth needed for public projects. Project key defaults to
+# the GitHub `<owner>_<repo>` convention; override with SONAR_PROJECT_KEY.
+# URL-encode the key so override values containing `&`, `=`, or whitespace
+# don't corrupt the query string. Capture curl's exit separately so a real
+# transport failure doesn't masquerade as "project not registered."
+SONAR_KEY="${SONAR_PROJECT_KEY:-${REPO%%/*}_${REPO##*/}}"
+SONAR_KEY_URI=$(jq -nr --arg v "$SONAR_KEY" '$v|@uri')
+SONAR_PS="${SONAR_PS:-500}"
+SONAR_CURL_OK=1
+SONAR_RAW=$(curl -fsS "https://sonarcloud.io/api/issues/search?componentKeys=${SONAR_KEY_URI}&pullRequest=${PR_NUMBER}&ps=${SONAR_PS}" 2>/dev/null) || SONAR_CURL_OK=0
+
+echo ""
+if [[ "$SONAR_CURL_OK" -ne 1 ]]; then
+    echo "════════════════ SONARCLOUD NEW ISSUES ════════════════"
+    echo "(curl failed contacting sonarcloud.io — section skipped; check network/rate-limit/API status)"
+elif echo "$SONAR_RAW" | jq -e 'has("issues")' >/dev/null 2>&1; then
+    SONAR_COUNT=$(echo "$SONAR_RAW" | jq '.issues | length')
+    SONAR_TOTAL=$(echo "$SONAR_RAW" | jq '.paging.total // .total // (.issues | length)')
+    echo "════════════════ SONARCLOUD NEW ISSUES ($SONAR_COUNT) ════════════════"
+    if [[ "$SONAR_COUNT" -gt 0 ]]; then
+        echo "$SONAR_RAW" | jq -r '
+          .issues[] |
+          "──────────────────────────────────────────────────",
+          "[\(.severity)] [\(.rule)] \(.component | sub("^[^:]+:"; "")):\(.line // "?")",
+          (.message | if length > 200 then .[:200] + "…" else . end),
+          ""
+        '
+    fi
+    if [[ "$SONAR_TOTAL" -gt "$SONAR_COUNT" ]]; then
+        echo "(warning: showing first ${SONAR_COUNT} of ${SONAR_TOTAL} issues; re-run with SONAR_PS=${SONAR_TOTAL} to fetch them all.)"
+    fi
+else
+    echo "════════════════ SONARCLOUD NEW ISSUES ════════════════"
+    echo "(project key '${SONAR_KEY}' not registered on sonarcloud.io — section skipped)"
+fi

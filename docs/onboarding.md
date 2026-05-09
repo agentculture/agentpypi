@@ -22,8 +22,8 @@ under "Roadmap".
 
 ### Step 1 — Skills setup ✓
 
-Vendored the canonical skills from steward (`version-bump`,
-`pr-review`). Added `.claude/skills.local.yaml.example`. Stood up
+Vendored the canonical skills from steward (`version-bump`, `cicd`,
+`communicate`). Added `.claude/skills.local.yaml.example`. Stood up
 `docs/skill-sources.md` so future re-syncs are deterministic. The
 re-sync procedure now lives in `./skill-sources.md` and the SKILL.md
 files themselves; the standalone setup walk-through has been retired.

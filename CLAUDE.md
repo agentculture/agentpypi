@@ -110,7 +110,7 @@ with — copy from `shushu` or `ghafi` rather than re-deriving:
 - **Lint:** `flake8` (+ `flake8-bandit`, `flake8-bugbear`), `pylint --errors-only`
 - **Security:** `bandit -r auntiepypi -c pyproject.toml`
 - **Markdown:** `markdownlint-cli2 "**/*.md"` (config: `.markdownlint-cli2.yaml` at repo root)
-- **Portability:** `bash .claude/skills/pr-review/scripts/portability-lint.sh`
+- **Portability:** `bash .claude/skills/cicd/scripts/portability-lint.sh`
   (no `/home/<user>/...` paths, no `~/.<dotfile>` refs in committed configs)
 
 `.flake8` carries any per-file ignores (e.g. `tests/*:S101`). Don't broaden
