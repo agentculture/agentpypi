@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3] - 2026-05-09
+
+### Fixed
+
+- Wire `coverage.xml` into SonarCloud by adding `sonar.python.coverage.reportPaths=coverage.xml` (and `sonar.python.version=3.12`) to `sonar-project.properties`. v0.8.2 set up the scan step but the property file was missing the report path, so the dashboard reported 0% coverage on new code despite the scan succeeding. Caught by Qodo on PR #18.
+
 ## [0.8.2] - 2026-05-09
 
 ### Added
