@@ -61,7 +61,7 @@ jobs:
           npm install -g markdownlint-cli2@0.21.0
           markdownlint-cli2 "**/*.md" "#node_modules" "#.local" "#.afi"
       - name: portability-lint
-        run: bash .claude/skills/pr-review/scripts/portability-lint.sh
+        run: bash .claude/skills/cicd/scripts/portability-lint.sh
 
   version-check:
     # Only run on PR events. On push to main after merge, HEAD == origin/main
