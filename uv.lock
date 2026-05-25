@@ -22,7 +22,7 @@ wheels = [
 
 [[package]]
 name = "auntiepypi"
-version = "0.8.1"
+version = "0.8.5"
 source = { editable = "." }
 dependencies = [
     { name = "bcrypt" },

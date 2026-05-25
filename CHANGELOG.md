@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.5] - 2026-05-25
+
+### Added
+
+- Vendored 8 new skills from guildmaster: `agent-config`, `doc-test-alignment`, `pypi-maintainer`, `run-tests`, `sonarclaude`, plus the devague-origin workflow trio `think` / `spec-to-plan` / `assign-to-workforce` (re-broadcast via guildmaster). Closes #25.
+
+### Changed
+
+- Skills supplier cutover steward → guildmaster (issue #25): re-pointed docs/skill-sources.md, CLAUDE.md, .claude/skills.local.yaml.example, and docs/onboarding.md to vendor .claude/skills/ from ../guildmaster/. steward retains the alignment role.
+- Resynced `cicd` to guildmaster's agex-based lane: replaced the 10 standalone scripts with the 5 `agex pr`-delegating ones (workflow.sh, pr-status.sh, pr-reply.sh, _resolve-nick.sh, portability-lint.sh) plus the status/await SonarCloud-gating extensions. Requires `agex` on PATH.
+- Resynced `communicate` to guildmaster: added post-comment.sh + supplier templates/; post-issue.sh is now agtag-backed and resolves the `- auntiepypi (Claude)` signature from culture.yaml (no hard-coded literal). Requires `agtag` on PATH.
+- Resynced `version-bump` from guildmaster.
+- Added `type: command` to every vendored SKILL.md (load-bearing for auntiepypi's culture/claude backend; core.skill_loader silently skips type-less skills).
+
 ## [0.8.4] - 2026-05-09
 
 ### Changed
