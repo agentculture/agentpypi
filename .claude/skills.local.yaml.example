@@ -3,8 +3,8 @@
 # Skills read skills.local.yaml first, falling back to this example.
 
 # Path to the Culture server's agent manifest (suffix → directory mapping).
-# Used by: agent-config (if vendored later) and any skill that resolves
-# a registered agent suffix to its repo dir.
+# Used by: agent-config and any skill that resolves a registered agent
+# suffix to its repo dir.
 culture_server_yaml: ~/.culture/server.yaml
 
 # Sibling project paths checked during the cicd alignment-delta step.
@@ -13,4 +13,5 @@ culture_server_yaml: ~/.culture/server.yaml
 sibling_projects:
   - ../afi-cli
   - ../ghafi
+  - ../guildmaster
   - ../steward

@@ -22,11 +22,15 @@ under "Roadmap".
 
 ### Step 1 — Skills setup ✓
 
-Vendored the canonical skills from steward (`version-bump`, `cicd`,
-`communicate`). Added `.claude/skills.local.yaml.example`. Stood up
-`docs/skill-sources.md` so future re-syncs are deterministic. The
-re-sync procedure now lives in `./skill-sources.md` and the SKILL.md
-files themselves; the standalone setup walk-through has been retired.
+Vendored the canonical skill kit (originally 3 from steward; resynced and
+expanded to 11 from **guildmaster** in the 2026-05-24 skills-supplier
+cutover — `cicd`, `communicate`, `version-bump`, `agent-config`,
+`doc-test-alignment`, `pypi-maintainer`, `run-tests`, `sonarclaude`, plus
+the devague workflow trio `think` / `spec-to-plan` / `assign-to-workforce`).
+Added `.claude/skills.local.yaml.example`. `docs/skill-sources.md` tracks
+provenance (now guildmaster upstream) so future re-syncs are deterministic.
+The re-sync procedure lives in `./skill-sources.md` and the SKILL.md files
+themselves; the standalone setup walk-through has been retired.
 
 ### Step 2 — AFI scaffold ✓
 

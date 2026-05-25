@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
-# Fetch GitHub issues with full body and comments.
+# Fetch GitHub issues with full body and comments. Thin wrapper around
+# `agtag issue fetch` that keeps this skill's range/list expansion
+# (agtag is single-issue per call).
+#
 # Usage: fetch-issues.sh [RANGE|NUMBER...] [--repo OWNER/REPO]
 #   fetch-issues.sh 191-197                   # range
 #   fetch-issues.sh 191                       # single
 #   fetch-issues.sh 191 192 195               # list
 #   fetch-issues.sh --repo foo/bar 5          # explicit repo (otherwise gh resolves it from the git remote)
-#
-# Passing --json explicitly avoids the gh "Projects (classic) deprecated"
-# error that bare `gh issue view <num>` triggers on issues attached to
-# a classic project board.
 
 set -euo pipefail
 
-REPO_ARGS=()
+REPO=""
 NUMBERS=()
 
 while [[ $# -gt 0 ]]; do
@@ -23,9 +22,7 @@ while [[ $# -gt 0 ]]; do
         echo "Usage: fetch-issues.sh [RANGE|NUMBER...] [--repo OWNER/REPO]" >&2
         exit 1
       fi
-      # Pass --repo and its value as separate argv elements so a value
-      # that contains whitespace can't word-split into extra gh args.
-      REPO_ARGS=(--repo "$2")
+      REPO="$2"
       shift 2 ;;
     *-*)  # range like 191-197
       IFS='-' read -r start end <<< "$1"
@@ -40,18 +37,23 @@ if [[ ${#NUMBERS[@]} -eq 0 ]]; then
   exit 1
 fi
 
+if ! command -v agtag >/dev/null 2>&1; then
+  echo "agtag not found on PATH. Install agtag (>=0.1) to use this skill." >&2
+  exit 2
+fi
+
+# agtag fetch resolves the repo from the local git remote when --repo
+# is omitted, matching the previous gh-based behavior.
+REPO_ARGS=()
+if [[ -n "$REPO" ]]; then
+  REPO_ARGS=(--repo "$REPO")
+fi
+
 for num in "${NUMBERS[@]}"; do
   echo "========================================"
   echo "ISSUE #${num}"
   echo "========================================"
-  gh issue view "$num" "${REPO_ARGS[@]}" --json number,title,state,labels,body,comments \
-    --jq '{
-      number: .number,
-      title: .title,
-      state: .state,
-      labels: [.labels[].name],
-      body: .body,
-      comments: [.comments[] | {author: .author.login, body: .body}]
-    }' 2>/dev/null || echo "ERROR: Could not fetch issue #${num}"
+  agtag issue fetch "${REPO_ARGS[@]}" --number "$num" --json \
+    || echo "ERROR: Could not fetch issue #${num}"
   echo
 done

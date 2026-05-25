@@ -63,10 +63,15 @@ AgentCulture mesh:
 
 Sibling to [`afi-cli`](https://github.com/agentculture/afi-cli) (CLI shape
 this repo inherits), [`ghafi`](https://github.com/agentculture/ghafi)
-(provisions the PyPI / TestPyPI GitHub Environments this repo drives), and
-[`steward`](https://github.com/agentculture/steward) (alignment + skills
-supplier; `steward doctor --scope siblings` will audit this repo against
-the corpus baseline once code lands).
+(provisions the PyPI / TestPyPI GitHub Environments this repo drives),
+[`guildmaster`](https://github.com/agentculture/guildmaster) (the **skills
+supplier** — `.claude/skills/` is vendored from
+`../guildmaster/.claude/skills/`; see `docs/skill-sources.md`), and
+[`steward`](https://github.com/agentculture/steward) (**alignment**;
+`steward doctor --scope siblings` audits this repo against the corpus
+baseline). The skills-supplier role moved steward → guildmaster in the
+2026-05-24 cutover; steward retains alignment and the sibling-pattern
+baseline.
 
 Workspace context: see `../CLAUDE.md` (the multi-project workspace) for
 cross-project conventions; do not duplicate them here. Per-user globals

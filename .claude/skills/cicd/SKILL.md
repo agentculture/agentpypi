@@ -1,145 +1,188 @@
 ---
 name: cicd
 description: >
-  auntiepypi's CI/CD lane: open PR (auto-wait for Qodo/Copilot), push fixes
-  (re-poll bots), triage feedback, reply, resolve. Adds a portability lint
-  (no absolute /home paths, no per-user dotfile refs in committed docs),
-  an alignment-delta check when CLAUDE.md or culture.yaml change, and
-  greenfield-aware test/version-bump steps. Use when: creating PRs in
-  auntiepypi, handling review feedback, polling CI status, or the user says
-  "create PR", "review comments", "address feedback", "resolve threads".
-  Renamed from `pr-review` in steward 0.7.0.
+  auntiepypi's CI/CD lane, layered on `agex pr`. Delegates lint / open /
+  read / reply / delta to agex; adds two extensions — `status`
+  (SonarCloud quality gate + hotspots + unresolved-thread tally) and
+  `await` (read --wait + status with non-zero exit on Sonar ERROR or
+  unresolved threads). Use when: creating PRs in auntiepypi, handling
+  review feedback, polling CI status, or the user says "create PR",
+  "review comments", "address feedback", "resolve threads". Renamed
+  from `pr-review` in steward 0.7.0; rebased on agex in 0.12.0.
+type: command
 ---
 
 # CI/CD — auntiepypi edition
 
-auntiepypi's PRs touch Python packaging code, server config, vendored skills,
-and CLAUDE.md guidance. The generic `pr-review` skills don't know that, so
-they miss two classes of bugs the AgentCulture sibling pattern keeps
-producing:
+`agex pr` (in `agentculture/agex-cli`) is the upstream for the
+five core PR-lifecycle verbs — `lint`, `open`, `read`, `reply`,
+`delta`. Steward used to vendor parallel scripts for each; in 0.12.0
+those vendored copies were dropped in favor of delegating to `agex`.
+What's left in this skill is **the steward-specific gating layer**:
 
-- **Path leaks** — committing absolute home-directory paths that work only on
-  the author's machine. (Steward's PR #1 had four of these; the lint runs
-  here so auntiepypi can't repeat the mistake.)
-- **Per-user config dependencies** — referencing a dotfile under the user's
-  home directory in repo guidance, breaking reproducibility for other
-  contributors and CI.
+- `status` — SonarCloud quality gate, OPEN issues, hotspots, deploy
+  preview URL, unresolved-inline-thread tally.
+- `await` — composes `agex pr read --wait` with `status` and gates on
+  Sonar `ERROR` / unresolved threads. The single command to run after
+  pushing a fix when you want "wake me when this PR is triage-able."
 
-This skill specializes Culture's `pr-review` flow to catch both up front, plus
-an alignment-delta step when auntiepypi-affecting files change. The workflow
-is encapsulated in `scripts/workflow.sh` — follow that, not a manual checklist.
+Those two are the steward unique surface today. The `await` combo verb
+landed natively in agex
+([agex-cli#41](https://github.com/agentculture/agex-cli/issues/41), now
+closed); the gate extras that aren't yet native — SonarCloud hotspots,
+deploy-preview URL, an explicit resolved/unresolved thread tally — are
+tracked upstream in
+[agex-cli#52](https://github.com/agentculture/agex-cli/issues/52) and
+migrate out of this skill once they land.
+
+The workflow is encapsulated in `scripts/workflow.sh` — follow that
+(or call `agex pr` directly).
+
+## The agex-cli inversion (upstream-as-consumer)
+
+One consumer is special: **agex-cli itself**, the repo that owns `agex pr`.
+Vendoring this skill there verbatim would re-vendor bash that just wraps the
+Python agex-cli already ships, so agex-cli vendors it **adapted-thin**
+([agex-cli#53](https://github.com/agentculture/agex-cli/pull/53)):
+`workflow.sh` is the only script and it forwards
+`lint | open | read | reply | delta | await` straight to the native
+`agex pr <verb>` — including the native `agex pr await` combo verb (agex-cli
+0.21.0). The steward `status` / `await` shell extensions and the vendored
+helpers (`pr-reply.sh`, `_resolve-nick.sh`, `portability-lint.sh`) are all
+redundant there, each superseded by a native verb. For that one consumer the
+skill collapses to a **pure delegate**.
+
+The only gate bits not yet native are SonarCloud **hotspots**, the
+**deploy-preview URL**, and an explicit **resolved/unresolved thread tally** —
+tracked upstream in
+[agex-cli#52](https://github.com/agentculture/agex-cli/issues/52). Once those
+land, steward retires `pr-status.sh` too and `workflow.sh status/await`
+delegates to native `agex pr` everywhere.
+
+**For broadcasts:** a skill-update brief to agex-cli should expect this thin
+`workflow.sh`-only shape, not steward's five-file layout. (Ref:
+[steward#53](https://github.com/agentculture/steward/issues/53).)
 
 ## Prerequisites
 
-Hard requirements: `gh` (GitHub CLI), `jq`, `bash`, `python3` (stdlib only),
-`curl` (used by `pr-status.sh`).
+Hard requirements: `agex` (>=0.1), `gh` (GitHub CLI), `jq`, `bash`,
+`python3` (stdlib only), `curl` (used by `pr-status.sh`).
 
-Soft requirement: `PyYAML` is needed **only for suffix mode** of the sibling
-`agent-config` skill, where it parses Culture's server manifest. Path mode
-and every `cicd` script work without it. If suffix mode runs without
-PyYAML it exits with a clear install hint.
+Install agex once:
+
+```bash
+uv tool install agex-cli   # or: pip install --user agex-cli
+```
+
+Soft requirement: `PyYAML` is needed **only for suffix mode** of the
+sibling `agent-config` skill, where it parses Culture's server
+manifest. Every `cicd` script works without it; suffix mode prints a
+clear install hint when invoked without it.
 
 Per-machine paths (sibling-project layout) live in
-`.claude/skills.local.yaml`; see the committed `.example` for the schema.
+`.claude/skills.local.yaml`; see the committed `.example` for the
+schema. `agex pr delta` reads the same file.
 
 ## How to run
 
 `scripts/workflow.sh` is the entry point. Subcommands:
 
-| Command | Purpose |
-|---------|---------|
-| `workflow.sh lint` | Portability lint on the current diff (staged + unstaged). |
-| `workflow.sh open-pr --title T [--body-file F] [--wait SECS] [...]` | `gh pr create` then sleep 180s (or `--wait SECS`) and fetch reviewer comments in one shot. Use after pushing the initial branch. |
-| `workflow.sh poll <PR>` | Fetch and display all review comments. |
-| `workflow.sh poll-readiness <PR> [--max-iters N] [--interval SECS] [--require LIST]` | Loop until all required reviewers are ready (default `qodo`; pass `--require qodo,copilot` to also gate on Copilot) — or the PR closes / iteration cap hits. Headline on stdout, per-iteration diagnostics on stderr. Direct wrapper around `scripts/poll-readiness.sh`. |
-| `workflow.sh wait-after-push <PR> [--wait SECS]` | Sleep 180s (or `--wait SECS`) then re-fetch comments. Use after pushing fixes. |
-| `workflow.sh await <PR>` | Poll for reviewer readiness (default: 30 × 60s ≈ 30 min cap, requires qodo only; tune with `STEWARD_PR_AWAIT_ITERS`, `STEWARD_PR_AWAIT_INTERVAL`, and `STEWARD_PR_REVIEWERS`), then run `pr-status.sh` (CI checks + SonarCloud quality gate, OPEN issues, hotspots) and `pr-comments.sh` (inline / issue / top-level / SonarCloud-new-issues sections). Exits non-zero on SonarCloud `ERROR` or unresolved threads. Setting the legacy `STEWARD_PR_AWAIT_SECONDS=<n>` falls back to a fixed sleep with a deprecation warning. |
-| `workflow.sh delta` | Dump each sibling project's `CLAUDE.md` head + `culture.yaml`. |
-| `workflow.sh reply <PR>` | Batch reply (JSONL on stdin) and resolve threads. |
-| `workflow.sh help` | Print this list. |
+| Command | What it does |
+|---------|--------------|
+| `workflow.sh lint` | `agex pr lint --exit-on-violation` — portability + alignment-trigger check. |
+| `workflow.sh open [gh-flags]` | `agex pr open --delayed-read`. Creates the PR, then polls 180s for an initial briefing. `--title TITLE` required; body via `--body-file PATH` or stdin. |
+| `workflow.sh read [PR] [--wait N]` | `agex pr read`. One-shot briefing (CI checks, SonarCloud gate + new issues, all comments, next-step footer). Pass `--wait N` to poll up to N seconds for required reviewers. |
+| `workflow.sh reply <PR>` | `agex pr reply <PR>` — batch JSONL replies (stdin) + thread resolve. agex auto-signs from `culture.yaml`. |
+| `workflow.sh delta` | `agex pr delta` — sibling alignment dump. |
+| `workflow.sh status <PR>` | **Steward extension.** `pr-status.sh` — Sonar gate, OPEN issues, hotspots, unresolved-thread breakdown, deploy preview URL. Authoritative gate for `await`. |
+| `workflow.sh await <PR>` | **Steward extension.** `agex pr read --wait` then `status`. Exits non-zero on Sonar ERROR or unresolved threads. Tunables: `STEWARD_PR_AWAIT_WAIT` (default 1800s passed to `--wait`), `STEWARD_PR_AWAIT_SECONDS` (legacy fixed pre-sleep, deprecated). |
+| `workflow.sh help` | Print the list. |
 
-The vendored single-comment helpers — `pr-reply.sh`, `pr-status.sh` — live
-next to `workflow.sh` and are usable directly when batching isn't appropriate.
+You can also call `agex pr <verb>` directly — `workflow.sh` is a
+typing-saver around the same verbs. The steward `status` and `await`
+extensions only have shell entry points.
 
-## Polling for reviewer readiness
+The vendored single-comment helper `pr-reply.sh` (plus its
+`_resolve-nick.sh` dependency) is still shipped — pinned by
+`tests/test_pr_reply_signature.py` and `tests/test_resolve_nick.py`,
+and useful when a one-off reply doesn't merit batch JSONL. It is not
+called by `workflow.sh` anymore. The vendored `portability-lint.sh`
+is also still shipped — `steward doctor`'s portability check runs it
+directly against target repos. Both are scheduled for follow-up
+migration to agex.
 
-`scripts/poll-readiness.sh` watches a PR until its required reviewers post
-real (not placeholder) feedback, the PR closes, or an iteration cap fires.
-It fetches `gh api` JSON directly — never `pr-comments.sh` output — so
-truncation can't bias the gate. Default required set is qodo only
-(see header comments and `--help` for tunables, env vars, and the `qodo` /
-`copilot` heuristics; Copilot is detected but not required because its
-review bot is silent on agentculture repos in 2026). Heartbeats stream to
-stderr; the final headline is the only thing on stdout.
+## Long waits (background polling)
 
-Two ways to drive it:
+`agex pr read --wait N` polls in-session for up to N seconds. The
+Anthropic prompt cache has a 5-minute TTL; sleeping past it burns
+context every cache miss. Two ways to drive the wait:
 
-- **Synchronous** — `workflow.sh await <PR>` after `gh pr create`. The
-  main session burns context during the wait; fine up to ~5 minutes.
-- **Asynchronous** — for longer waits, run the looper inside a background
-  subagent (Agent tool, `run_in_background: true`) so the main session
-  only pays the cache cost when readiness fires. The subagent's only job
-  is to invoke `poll-readiness.sh` and echo its headline back. The
-  parent triages with `workflow.sh await <PR>` when the notification
-  arrives. The user can interrupt with TaskStop.
+- **Synchronous** — `workflow.sh await <PR>` after `gh pr create` /
+  `workflow.sh open`. Fine when readiness is expected within ~5
+  minutes.
+- **Asynchronous** — for longer waits, run `agex pr read --wait NNN`
+  inside a background subagent (Agent tool, `run_in_background: true`)
+  so the main session only pays the cache cost when readiness fires.
+  The subagent's only job is to invoke `agex pr read --wait` and echo
+  its headline back. The parent triages with `workflow.sh await`
+  when the notification arrives. The user can interrupt with
+  TaskStop.
 
-This pattern is borrowed from sibling repo
+This pattern was originally borrowed from sibling repo
 [`agentculture/cfafi`](https://github.com/agentculture/cfafi)'s `poll`
-skill — steward (and auntiepypi as a downstream vendor) ships only the
-looper rather than promoting `poll` to its own first-class skill until
-other verbs need the same primitive.
+skill. The async guidance is also filed upstream
+([agex-cli#41](https://github.com/agentculture/agex-cli/issues/41)).
 
-## End-to-end flow
+## Conventions
 
-```text
-git checkout -b <type>/<desc>
-# ... edit ...
-.claude/skills/cicd/scripts/workflow.sh lint
-git commit -am "..." && git push -u origin <branch>
-gh pr create --title "..." --body "..."   # title <70 chars, body signed "- <nick> (Claude)"
-.claude/skills/cicd/scripts/workflow.sh await <PR>   # readiness loop, then CI + SonarCloud + all comments
-# triage; if CLAUDE.md/culture.yaml/.claude/skills changed:
-.claude/skills/cicd/scripts/workflow.sh delta
-# fix, re-lint, push
-.claude/skills/cicd/scripts/workflow.sh reply <PR> < replies.jsonl
-gh pr checks <PR>
-# Wait for human merge — never merge yourself.
-```
+`agex pr` emits a **"Next step:"** footer at the end of every command
+that names the right next verb (the same chain `agex learn cicd`
+documents) — follow that rather than memorizing an order. `workflow.sh
+help` mirrors the verb table when you need the steward-flavored
+extensions (`status`, `await`) on top.
 
-Branch naming: `fix/<desc>`, `feat/<desc>`, `docs/<desc>`, `skill/<name>`.
-PR / comment signature: `- <nick> (Claude)`, where `<nick>` comes from
-the agent's own `culture.yaml` — first agent's `suffix` — falling back
-to the git-repo basename when no `culture.yaml` is present. The reply
-script resolves this via `scripts/_resolve-nick.sh` and auto-appends the
-signature only when the body isn't already signed, so JSONL reply
-entries can include or omit it. Hand-rolled `gh pr create` and
-`gh issue comment` calls should follow the same convention.
+Branch naming: `fix/<desc>`, `feat/<desc>`, `docs/<desc>`,
+`skill/<name>`. PR / comment signature: `- <nick> (Claude)`, where
+`<nick>` is resolved by `agex` from the agent's own `culture.yaml`
+(first agent's `suffix`), falling back to the git-repo basename. agex
+auto-appends the signature on `pr open` and `pr reply` only when the
+body isn't already signed.
+
+## Finishing a branch
+
+When implementation on a branch is complete and tests pass, go straight
+to `workflow.sh open` (push the branch + open the PR). Do **not** stop to
+present a *merge / PR / keep / discard* menu and wait for a choice — in
+AgentCulture the standing default is **always "push and create a Pull
+Request."** This overrides the Superpowers `finishing-a-development-branch`
+skill's interactive menu, which otherwise pauses the flow at the moment
+work is ready to integrate. Merge-locally, keep-as-is, and discard happen
+only when the user explicitly asks for one of them.
 
 ## Triage rules
 
 For every comment, decide **FIX** or **PUSHBACK** with reasoning.
 
-Default to **FIX** for: portability complaints (always valid for auntiepypi —
-recurring bug class across the AgentCulture sibling pattern), test or doc
-requests, style nits aligned with workspace conventions.
+Default to **FIX** for: portability complaints (always valid for
+Steward — recurring bug class), test or doc requests, style nits
+aligned with workspace conventions.
 
-Default to **PUSHBACK** for: architecture opinions that conflict with workspace
-`CLAUDE.md` or the all-backends rule; greenfield false-positives (e.g. "add
-tests" before there's any source — defer to a later PR, don't refuse).
+Default to **PUSHBACK** for: architecture opinions that conflict with
+workspace `CLAUDE.md` or the all-backends rule; greenfield
+false-positives (e.g. "add tests" before there's any source — defer
+to a later PR, don't refuse).
 
 ### Alignment-delta rule
 
 If the PR touches `CLAUDE.md`, `culture.yaml`, or anything under
 `.claude/skills/`, run `workflow.sh delta` **before** declaring FIX or
-PUSHBACK on each comment. The script dumps the head of every sibling
-project's `CLAUDE.md` plus the full `culture.yaml`, using `sibling_projects`
-from `skills.local.yaml`. Note any sibling that needs a follow-up PR and
-mention it in your reply.
+PUSHBACK on each comment. Note any sibling that needs a follow-up PR
+and mention it in your reply.
 
 ## Greenfield-aware steps
 
-The lint and the workflow script are always-on. Stack-specific steps are
-conditional and currently no-op (greenfield repo):
+The lint and the workflow script are always-on. Stack-specific steps
+are conditional and currently no-op (greenfield repo):
 
 ```bash
 [ -d tests ] && [ -f pyproject.toml ] && uv run pytest tests/ -x -q
@@ -148,17 +191,18 @@ conditional and currently no-op (greenfield repo):
 ```
 
 Revisit each line as the corresponding stack element actually lands.
+A `pr lint --extra=tests,version,markdown` ask is filed upstream
+([agex-cli#41](https://github.com/agentculture/agex-cli/issues/41)).
 
 ## Reply etiquette
 
-Every comment must get a reply — no silent fixes. Always pass `--resolve`
-when batch-replying so threads close automatically. Reference the
-review-comment IDs in the fix-up commit message.
+Every comment must get a reply — no silent fixes. `agex pr reply`
+includes thread-resolve by default. Reference the review-comment IDs
+in the fix-up commit message.
 
-SonarCloud is queried in two places: `pr-status.sh` (quality gate, OPEN
-issues, hotspots) and the Section-4 dump in `pr-comments.sh` (new-issue
-list). Both derive the project key as `<owner>_<repo>`; override with
-`SONAR_PROJECT_KEY=<key>` for non-standard naming, and they silently skip
-when the project isn't on SonarCloud. auntiepypi isn't yet a registered mesh
-agent, so the post-merge IRC ping that Culture's `pr-review` includes is
-still skipped — that returns when auntiepypi joins the mesh.
+The `status` extension queries SonarCloud directly (it predates the
+upstream Sonar integration in `agex pr read`). Both surfaces are
+trustworthy — `agex pr read` for display in the briefing, `status` for
+the gate. Steward isn't yet a registered mesh agent, so the
+post-merge IRC ping that Culture's `pr-review` includes is still
+skipped — that returns when Steward joins the mesh.
